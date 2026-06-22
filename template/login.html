@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Pharma ERP - Welcome Portal</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background: linear-gradient(135deg, #141e30 0%, #243b55 100%); height: 100vh; font-family: 'Segoe UI', sans-serif; }
+        .auth-card { border: none; border-radius: 15px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3); background: #ffffff; }
+        .brand-header { background-color: #0d6efd; color: #ffffff; padding: 20px; text-align: center; border-top-left-radius: 15px; border-top-right-radius: 15px; }
+        .btn-custom-primary { background-color: #1877f2; border: none; color: white; }
+        .btn-custom-primary:hover { background-color: #166fe5; }
+        .btn-custom-success { background-color: #42b72a; border: none; color: white; }
+        .btn-custom-success:hover { background-color: #36a420; }
+        .btn-custom-secondary { background-color: #6c757d; border: none; color: white; }
+        .btn-custom-secondary:hover { background-color: #5a6268; }
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body class="d-flex align-items-center">
+<div class="container">
+    <div class="row justify-content-center align-items-center g-5">
+        
+        <div class="col-lg-6 text-white text-center text-lg-start">
+            <h1 class="display-4 fw-bold m-0 text-warning" style="text-shadow: 2px 2px 4px rgba(0,0,0,0.4);">Make your life easy with us.</h1>
+            <p class="fs-5 mt-3 text-light" style="opacity: 0.85;">Make your business smooth, accurate, and easy with our professional medicine management ERP software.</p>
+        </div>
+
+        <div class="col-lg-5 col-md-8">
+            <div class="card auth-card">
+                <div class="brand-header"><h5 class="fw-bold m-0">Make your life easy with us</h5></div>
+                <div class="card-body p-4">
+                    
+                    <!-- লগইন ফর্ম -->
+                    <div id="loginBox">
+                        {% if error %}<div class="alert alert-danger p-2 small text-center fw-bold">⚠️ {{ error }}</div>{% endif %}
+                        <form method="POST" action="/login">
+                            <div class="mb-3"><input type="text" name="mobile" class="form-control form-control-lg fs-6" placeholder="Mobile Number" maxlength="10" required></div>
+                            <div class="mb-3"><input type="password" name="password" class="form-control form-control-lg fs-6" placeholder="Password" required></div>
+                            <button type="submit" class="btn btn-custom-primary btn-lg w-100 fw-bold mb-3 fs-6">Log In</button>
+                        </form>
+                        
+                        <!-- গেস্ট ডাইরেক্ট ওপেন বাটন -->
+                        <a href="/guest_login" class="btn btn-custom-secondary btn-lg w-100 fw-bold mb-3 fs-6">🚪 Login as Guest (Direct Open)</a>
+                        
+                        <div class="text-center border-top pt-3 mt-2">
+                            <button type="button" class="btn btn-custom-success btn-lg fw-bold fs-6 px-4" onclick="showRegisterForm()">Create New Account</button>
+                        </div>
+                    </div>
+
+                    <!-- সাইন আপ ফর্ম -->
+                    <div id="registerBox" class="hidden">
+                        <h5 class="fw-bold mb-3 text-primary">✨ Create New ID</h5>
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold text-muted">Medical Shop Name <span class="text-secondary fw-normal">(Optional)</span></label>
+                            <input type="text" id="regShopName" class="form-control fs-6" placeholder="e.g. DARBESH MEDICAL">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold text-muted">Mobile Number (10 Digit)</label>
+                            <input type="text" id="regMobile" class="form-control fs-6" placeholder="e.g. 9876543210" maxlength="10" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold text-muted">Set Password</label>
+                            <input type="password" id="regPassword" class="form-control fs-6" placeholder="Minimum 4 characters" required>
+                        </div>
+                        <button type="button" class="btn btn-primary btn-lg w-100 fw-bold fs-6 mb-3" onclick="sendOtpRequest()">📩 Send Verification OTP</button>
+                        <div class="text-center border-top pt-2"><a href="#" class="small text-decoration-none fw-bold text-muted" onclick="showLoginForm()">⬅️ Back to Log In</a></div>
+                    </div>
+
+                    <!-- ওটিপি বক্স -->
+                    <div id="otpBox" class="hidden">
+                        <h5 class="fw-bold mb-2 text-success">✔ OTP Sent!</h5>
+                        <input type="text" id="otpInput" class="form-control text-center fw-bold fs-3 mb-3" placeholder="0000" maxlength="4">
+                        <button type="button" class="btn btn-success btn-lg w-100 fw-bold fs-6 mb-3" onclick="verifyOtpRequest()">✅ Verify & Register</button>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+function showRegisterForm() { document.getElementById('loginBox').classList.add('hidden'); document.getElementById('registerBox').classList.remove('hidden'); }
+function showLoginForm() { document.getElementById('registerBox').classList.add('hidden'); document.getElementById('loginBox').classList.remove('hidden'); }
+function sendOtpRequest() {
+    let shop = document.getElementById('regShopName').value;
+    let mob = document.getElementById('regMobile').value;
+    let pass = document.getElementById('regPassword').value;
+    if(!mob || !pass) { alert("মোবাইল এবং পাসওয়ার্ড দিন!"); return; }
+    fetch('/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ shop_name: shop, mobile: mob, password: pass }) })
+    .then(res => res.json()).then(data => {
+        if(data.status === 'success') { alert(data.message); document.getElementById('registerBox').classList.add('hidden'); document.getElementById('otpBox').classList.remove('hidden'); }
+        else { alert("Error: " + data.message); }
+    });
+}
+function verifyOtpRequest() {
+    let code = document.getElementById('otpInput').value;
+    fetch('/verify_otp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ otp: code }) })
+    .then(res => res.json()).then(data => {
+        if(data.status === 'success') { alert(data.message); window.location.href = "/"; }
+        else { alert("Error: " + data.message); }
+    });
+}
+</script>
+</body>
+</html>
