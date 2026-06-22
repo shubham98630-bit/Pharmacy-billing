@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Enterprise Pharma ERP</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .search-results { position: absolute; z-index: 1050; width: 100%; max-height: 180px; overflow-y: auto; display: none; }
+        .dropdown-menu-end { right: 0; left: auto; }
+        .list-group-item.active-suggestion { background-color: #0d6efd !important; color: white !important; }
+        .clickable-row { cursor: pointer; transition: background-color 0.2s; }
+        .clickable-row:hover { background-color: #f1f1f1 !important; }
+        .batch-details-box { background-color: #fdfdfd; padding: 10px; border-radius: 4px; display: none; }
+        #activeOrderRunnerBox { display: none; background: #212529; color: white; border-radius: 8px; padding: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+        .runner-badge { font-size: 14px; padding: 6px 12px; border-radius: 20px; }
+        @media print { .no-print { display: none !important; } }
+    </style>
+</head>
+<body class="bg-light">
+
+<nav class="navbar navbar-expand navbar-dark bg-danger no-print mb-3 shadow-sm">
+    <div class="container-fluid">
+        <span class="navbar-brand fw-bold">⚙️ PHARMA ENTERPRISE ERP</span>
+        <div class="ms-auto">
+            <div class="dropdown">
+                <button class="btn btn-danger fs-4 p-0 border-0 dropdown-toggle" type="button" id="threeDotMenu" data-bs-toggle="dropdown" aria-expanded="false" style="line-height: 1; min-width: 20px;">⋮</button>
+                <ul class="dropdown-menu dropdown-menu-end shadow-lg" aria-labelledby="threeDotMenu">
+                    <li><button class="dropdown-item fw-bold" type="button" data-bs-toggle="modal" data-bs-target="#profileModal">⚙️ Edit Profile</button></li>
+                    <li><button class="dropdown-item fw-bold text-dark" type="button" data-bs-toggle="modal" data-bs-target="#supplierModal" onclick="loadSuppliersList()">🏭 Manage Suppliers</button></li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li><button class="dropdown-item fw-bold" type="button" data-bs-toggle="modal" data-bs-target="#billHistoryModal" onclick="loadBillHistory('1month')">📑 Bill History</button></li>
+                    <li><button class="dropdown-item fw-bold text-success" type="button" data-bs-toggle="modal" data-bs-target="#incomingStockHistoryModal" onclick="loadIncomingStockHistory('1month')">📥 Total Incoming Stock History</button></li>
+                    <li><button class="dropdown-item fw-bold text-primary" type="button" data-bs-toggle="modal" data-bs-target="#outgoingStockModal" onclick="loadOutgoingStockLogs('1month')">📦 Outgoing Stock Status</button></li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li><a class="dropdown-item text-danger fw-bold" href="/logout">Logout 🚪</a></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</nav>
+
+<div class="container-fluid">
+    <ul class="nav nav-tabs no-print mb-3" id="myTab" role="tablist">
+        <li class="nav-item"><button class="nav-link active fw-bold" id="bill-tab" data-bs-toggle="tab" data-bs-target="#bill-pane" type="button" role="tab">🛒 Billing Counter</button></li>
+        <li class="nav-item"><button class="nav-link fw-bold" id="stock-tab" data-bs-toggle="tab" data-bs-target="#stock-pane" type="button" role="tab">📦 Add New Stock</button></li>
+        <li class="nav-item"><button class="nav-link fw-bold" id="check-stock-tab" data-bs-toggle="tab" data-bs-target="#check-stock-pane" type="button" role="tab" onclick="loadAvailableStockList()">🔍 Check Available Stock</button></li>
+        <li class="nav-item"><button class="nav-link fw-bold text-danger" id="order-tab" data-bs-toggle="tab" data-bs-target="#order-pane" type="button" role="tab" onclick="loadOrderMedicinePanel()">📋 Order Medicine</button></li>
+    </ul>
+
+    <div class="tab-content" id="myTabContent">
+        <div class="tab-pane fade show active" id="bill-pane" role="tabpanel">
+            <div class="card p-3 shadow-sm bg-dark text-white mb-4 no-print">
+                <div class="d-flex justify-content-between">
+                    <h5 class="fw-bold text-warning mb-2">⚡ Running Customer Multi-Item Counter <kbd class="bg-secondary text-white ms-2">Alt + R</kbd></h5>
+                    <span class="badge bg-danger p-2" id="quickBasketCount">0 Items In Basket</span>
+                </div>
+                <div class="row g-2 position-relative mb-2">
+                    <div class="col-md-4">
+                        <input type="text" id="quickSearch" class="form-control form-control-sm" placeholder="Search medicine..." oninput="searchMedicine(this, 'quickSearchResults', 'quick')" onkeydown="handleSearchNavigation(event, 'quickSearchResults', 'quick')">
+                        <div id="quickSearchResults" class="list-group search-results shadow-sm text-dark"></div>
+                    </div>
+                    <div class="col-md-2"><input type="text" id="q_batch" class="form-control form-control-sm" placeholder="Batch" readonly></div>
+                    <div class="col-md-2"><input type="number" id="q_qty" class="form-control form-control-sm" placeholder="Qty" value="1" onfocus="this.select()" onkeydown="handleQuickQtyKeyDown(event)"></div>
+                    <div class="col-md-2"><button type="button" class="btn btn-warning btn-sm w-100 fw-bold" onclick="addRunningItemToBasket()">+ Add Basket [Space]</button></div>
+                    <div class="col-md-2"><button type="button" class="btn btn-success btn-sm w-100 fw-bold" onclick="submitMultiQuickStockOut()">⚡ Final Quick Out [Enter]</button></div>
+                </div>
+                <div id="quickBasketContainer" class="p-2 bg-secondary bg-opacity-20 rounded" style="display:none;">
+                    <span class="small text-warning fw-bold">🛒 Current Basket Items:</span>
+                    <div id="quickBasketItemsList" class="d-flex flex-wrap gap-2 mt-1"></div>
+                </div>
+            </div>
+
+            <div class="card p-4 shadow-sm bg-white">
+                <div class="d-flex justify-content-between border-bottom pb-2 mb-3">
+                    <div>
+                        <h3 class="text-danger fw-bold m-0" id="liveShopNameDisplay">{{ shop_name }}</h3>
+                        <small class="fw-bold text-secondary d-block mt-1" id="liveGstDisplay">GSTIN: {{ gstin }}</small>
+                        <small>Date: {{ date }}</small>
+                    </div>
+                    <div class="text-end"><h4 class="m-0" id="invDisplay">TAX INVOICE</h4></div>
+                </div>
+
+                <div class="row g-2 mb-3 p-2 bg-warning bg-opacity-10 border rounded no-print">
+                    <div class="col-md-4">
+                        <label class="small fw-bold">Customer Name</label>
+                        <input type="text" id="custName" class="form-control form-control-sm" value="M/s BISWAS PHARMACY">
+                    </div>
+                </div>
+
+                <div class="row g-2 p-3 bg-light border rounded no-print position-relative">
+                    <div class="col-md-4">
+                        <label class="small fw-bold">Search Medicine <kbd class="bg-secondary text-white ms-1">Alt + B</kbd></label>
+                        <input type="text" id="prodSearch" class="form-control" placeholder="Type name to bill..." oninput="searchMedicine(this, 'searchResults', 'bill')" onkeydown="handleSearchNavigation(event, 'searchResults', 'bill')">
+                        <div id="searchResults" class="list-group search-results shadow-sm"></div>
+                    </div>
+                    <div class="col-md-2"><label class="small fw-bold">Batch</label><input type="text" id="b_batch" class="form-control" readonly></div>
+                    <div class="col-md-2"><label class="small fw-bold">Stock (Qty)</label><input type="text" id="b_stock" class="form-control text-danger fw-bold" readonly></div>
+                    <div class="col-md-1"><label class="small fw-bold">Rate/Pkt</label><input type="number" id="b_rate" class="form-control" readonly></div>
+                    <div class="col-md-1"><label class="small fw-bold">Sell Qty</label><input type="number" id="b_sell_str" class="form-control" value="1"></div>
+                    <div class="col-md-1"><label class="small fw-bold">Disc %</label><input type="number" id="b_disc" class="form-control" value="0"></div>
+                    <div class="col-md-1 d-flex align-items-end"><button type="button" class="btn btn-success w-100 fw-bold" onclick="addItemToBillTable()">Add</button></div>
+                </div>
+
+                <table class="table table-bordered table-sm mt-3" id="invoiceTable">
+                    <thead class="table-dark text-center small">
+                        <tr><th>Qty (Packets)</th><th>Description</th><th>Batch</th><th>Rate/Pkt</th><th>Disc %</th><th>Net Total</th></tr>
+                    </thead>
+                    <tbody class="text-center small"></tbody>
+                </table>
+                <div class="text-end mt-3">
+                    <button type="button" class="btn btn-primary no-print fw-bold me-2" onclick="submitInvoice()">💾 Save Bill</button>
+                    <button type="button" class="btn btn-dark no-print fw-bold" onclick="window.print()">🖨️ Print</button>
+                    <h3 class="fw-bold text-success mt-2">Grand Total: <span id="gTotalDisplay">₹0.00</span></h3>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="stock-pane" role="tabpanel">
+            <div class="card p-4 shadow-sm bg-white" style="max-width: 800px; margin: 0 auto;">
+                <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-3">
+                    <h4 class="text-primary fw-bold m-0">📦 Add Incoming New Stock</h4>
+                    <button type="button" class="btn btn-sm btn-outline-secondary fw-bold" onclick="refreshStockForm()">🔄 Clear Form</button>
+                </div>
+                <div class="row g-3">
+                    <div class="col-md-6 position-relative">
+                        <label class="form-label small fw-bold text-primary">Medicine Name</label>
+                        <input type="text" id="s_name" class="form-control step-input" placeholder="OXRA 10" oninput="searchMedicine(this, 'stockSearchResults', 'stock')" onkeydown="handleSearchNavigation(event, 'stockSearchResults', 'stock')" autocomplete="off">
+                        <div id="stockSearchResults" class="list-group search-results shadow-sm text-dark"></div>
+                    </div>
+                    <div class="col-md-6 position-relative">
+                        <label class="form-label small fw-bold text-secondary">Supplier Name</label>
+                        <input type="text" id="s_supplier" class="form-control step-input" placeholder="Type Supplier Name..." oninput="searchSupplierLive(this)" onkeydown="handleSearchNavigation(event, 'supplierSearchResults', 'supplier')" autocomplete="off">
+                        <div id="supplierSearchResults" class="list-group search-results shadow-sm text-dark"></div>
+                    </div>
+                    <div class="col-md-6 position-relative">
+                        <label class="form-label small fw-bold text-info">Product Type</label>
+                        <input type="text" id="s_type" class="form-control step-input" placeholder="Tablet, Capsule, Syrup..." oninput="searchProductTypeLive(this)" onkeydown="handleSearchNavigation(event, 'typeSearchResults', 'type')" autocomplete="off">
+                        <div id="typeSearchResults" class="list-group search-results shadow-sm text-dark"></div>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold">Packing Desc</label>
+                        <input type="text" id="s_pack" class="form-control step-input" placeholder="14 S">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold">Qty Per Strip</label>
+                        <input type="number" id="s_qty_per" class="form-control step-input" value="10" onfocus="this.select()">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Batch No</label>
+                        <input type="text" id="s_batch" class="form-control step-input" placeholder="BATCH123">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold">HSN Code</label>
+                        <input type="text" id="s_hsn" class="form-control step-input" placeholder="30049099">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold">Expiry Date (Month / Year)</label>
+                        <div class="input-group">
+                            <input type="number" id="s_exp_month" class="form-control text-center step-input" placeholder="MM" min="1" max="12" onfocus="this.select()">
+                            <span class="input-group-text">/</span>
+                            <input type="number" id="s_exp_year" class="form-control text-center step-input" placeholder="YYYY" onfocus="this.select()">
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold">MRP Per Pkt</label>
+                        <input type="number" step="0.01" id="s_mrp" class="form-control step-input" onfocus="this.select()">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Wholesale Rate/Pkt</label>
+                        <input type="number" step="0.01" id="s_rate" class="form-control step-input" onfocus="this.select()">
+                    </div>
+                    <div class="col-md-3 bg-light p-2 border rounded">
+                        <label class="form-label small text-danger fw-bold">Min Stock Alert Limit</label>
+                        <input type="number" id="s_min_stock" class="form-control text-center step-input" value="5" onfocus="this.select()">
+                    </div>
+                    <div class="col-md-3 bg-light p-2 border rounded">
+                        <label class="form-label small text-success fw-bold">Incoming Qty (Total Packets)</label>
+                        <input type="number" id="s_str" class="form-control text-center step-input" value="0" onfocus="this.select()">
+                    </div>
+                    <div class="col-12 mt-3">
+                        <button type="button" id="saveStockBtn" class="btn btn-primary w-100 fw-bold" onclick="submitNewStock()">🚀 Save New Stock</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="check-stock-pane" role="tabpanel">
+            <div class="card p-4 shadow-sm bg-white">
+                <div class="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center border-bottom pb-2 mb-3 gap-2">
+                    <h4 class="text-secondary fw-bold m-0">🔍 Live Inventory Status <kbd class="bg-secondary text-white ms-2">Alt + S</kbd></h4>
+                    <div style="max-width: 350px; width: 100%;">
+                        <input type="text" id="inventorySearchBar" class="form-control form-control-sm" placeholder="🔍 Search medicine by name..." oninput="filterInventoryTable(this.value)">
+                    </div>
+                </div>
+                <table class="table table-bordered table-sm" id="stockCheckTable">
+                    <thead class="table-dark text-center">
+                        <tr><th>Medicine Name</th><th>Total Stock</th><th>Minimum Stock Limit</th><th>Wholesale Rate</th></tr>
+                    </thead>
+                    <tbody class="text-center"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="order-pane" role="tabpanel">
+            
+            <div id="activeOrderRunnerBox" class="mb-4">
+                <div class="d-flex justify-content-between align-items-center border-bottom border-secondary pb-2 mb-3">
+                    <h5 class="fw-bold text-warning m-0">⚡ Interactive Order Calling Runner Mode</h5>
+                    <button type="button" class="btn btn-sm btn-outline-light" onclick="stopOrderRunnerWorkflow()">🛑 Exit Runner</button>
+                </div>
+                <div class="row align-items-center g-3">
+                    <div class="col-md-5">
+                        <span class="small text-secondary d-block mb-1">CURRENT MEDICINE FOCUS:</span>
+                        <h3 class="fw-bold text-white m-0" id="runnerMedName">MEDICINE LOADING...</h3>
+                    </div>
+                    <div class="col-md-3 text-center border-start border-end border-secondary">
+                        <span class="small text-secondary d-block mb-1">DEFICIT TO BUY:</span>
+                        <span class="badge bg-danger runner-badge fw-bold" id="runnerTargetQty">0 Pkts</span>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="small fw-bold text-warning mb-1">Extra Needed Qty (If partially received):</label>
+                        <input type="number" id="runnerExtraInput" class="form-control form-control-lg bg-dark text-warning border-warning fw-bold text-center" placeholder="Type remainder..." autocomplete="off">
+                        <small class="text-muted d-block mt-1">Press <b>Enter</b> = Full Placed | <b>Space</b> = Can't Get (0) | <b>Ctrl+Z</b> = Back</small>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card p-3 shadow-sm bg-white mb-4">
+                <div class="row align-items-center">
+                    <div class="col-md-7"><h5 class="m-0 text-primary fw-bold">✍️ Book a New Customer Requested Medicine Order</h5></div>
+                    <div class="col-md-5">
+                        <div class="input-group">
+                            <input type="text" id="customOrderInput" class="form-control form-control-sm" placeholder="Enter custom requested medicine name...">
+                            <button type="button" class="btn btn-primary btn-sm fw-bold" onclick="submitCustomOrderRequest()">+ Add Request</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <div class="card p-3 shadow-sm bg-white border-danger">
+                        <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-2">
+                            <h5 class="text-danger fw-bold m-0">🛒 Medicines Pending for Order</h5>
+                            <button type="button" class="btn btn-sm btn-danger fw-bold px-3 shadow-sm" onclick="startOrderRunnerWorkflow()">⚡ Start Calling Order Loop</button>
+                        </div>
+                        <table class="table table-striped table-bordered table-sm small" id="shortageOrderTable">
+                            <thead class="table-dark text-center">
+                                <tr><th>Medicine Name</th><th>Current Stock</th><th>Alert Limit</th></tr>
+                            </thead>
+                            <tbody class="text-center"></tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <div class="col-md-6">
+                    <div class="card p-3 shadow-sm bg-white border-success">
+                        <h5 class="text-success fw-bold border-bottom pb-2 mb-2">✅ Orders Placed Successfully</h5>
+                        <table class="table table-bordered table-sm small" id="placedOrdersTable">
+                            <thead class="table-success text-center">
+                                <tr><th>Medicine Name</th><th>Status Status</th></tr>
+                            </thead>
+                            <tbody class="text-center"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="profileModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-dark text-white"><h5 class="modal-title fw-bold">⚙️ Edit Profile Settings</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <div class="mb-3"><label class="form-label small fw-bold">Medical Shop Name</label><input type="text" id="p_shop_name" class="form-control" value="{{ shop_name }}"></div>
+                <div class="mb-3"><label class="form-label small fw-bold">GSTIN Number</label><input type="text" id="p_gstin" class="form-control" value="{{ gstin }}"></div>
+                <button type="button" class="btn btn-primary w-100 fw-bold" onclick="saveProfileChanges()">Save Profile Updates</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="supplierModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-secondary text-white"><h5 class="modal-title fw-bold">🏭 Manage Suppliers List</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <div class="input-group mb-3">
+                    <input type="text" id="p_supplier_name" class="form-control form-control-sm" placeholder="Add New Wholesaler Name...">
+                    <button type="button" class="btn btn-success btn-sm fw-bold" onclick="saveStandaloneSupplier()">+ Add</button>
+                </div>
+                <div style="max-height: 250px; overflow-y: auto;">
+                    <ul class="list-group" id="modalSuppliersListGroup"></ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="billHistoryModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white"><h5 class="modal-title fw-bold">📑 Official Bill History Log</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <div class="btn-group btn-group-sm mb-3 w-100"><button type="button" class="btn btn-outline-primary active" onclick="filterHistory('bill', '1month', this)">1 Month</button><button type="button" class="btn btn-outline-primary" onclick="filterHistory('bill', '5month', this)">5 Months</button><button type="button" class="btn btn-outline-primary" onclick="filterHistory('bill', '1year', this)">1 Year</button><button type="button" class="btn btn-outline-primary" onclick="filterHistory('bill', '5year', this)">5 Years</button></div>
+                <table class="table table-sm table-bordered table-hover"><thead class="table-dark text-center"><tr><th>Invoice No</th><th>Customer Name</th><th>Date & Time</th><th>Grand Total</th></tr></thead><tbody id="billHistoryTableBody" class="text-center"></tbody></table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="incomingStockHistoryModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white"><h5 class="modal-title fw-bold">📥 Incoming Stock Purchase Logs</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <div class="btn-group btn-group-sm mb-3 w-100"><button type="button" class="btn btn-outline-success active" onclick="filterHistory('incoming', '1month', this)">1 Month</button><button type="button" class="btn btn-outline-success" onclick="filterHistory('incoming', '5month', this)">5 Months</button><button type="button" class="btn btn-outline-success" onclick="filterHistory('incoming', '1year', this)">1 Year</button><button type="button" class="btn btn-outline-success" onclick="filterHistory('incoming', '5year', this)">5 Years</button></div>
+                <table class="table table-sm table-bordered table-striped">
+                    <thead class="table-dark text-center"><tr><th>Medicine Name</th><th>Batch No</th><th>Qty Received</th><th>Supplier Name</th><th>Date & Time</th></tr></thead>
+                    <tbody id="incomingStockHistoryTableBody" class="text-center"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="outgoingStockModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-dark text-white"><h5 class="modal-title fw-bold">📦 Outgoing Stock Logs</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body"><div class="btn-group btn-group-sm mb-3 w-100"><button type="button" class="btn btn-outline-secondary active" onclick="filterHistory('outgoing', '1month', this)">1 Month</button><button type="button" class="btn btn-outline-secondary" onclick="filterHistory('outgoing', '5month', this)">5 Months</button><button type="button" class="btn btn-outline-secondary" onclick="filterHistory('outgoing', '1year', this)">1 Year</button><button type="button" class="btn btn-outline-secondary" onclick="filterHistory('outgoing', '5year', this)">5 Years</button></div><table class="table table-sm table-striped table-bordered"><thead class="table-dark text-center"><tr><th>Medicine Name</th><th>Batch</th><th>Qty Out</th><th>Channel Type</th><th>Date & Time</th></tr></thead><tbody id="outgoingStockTableBody" class="text-center"></tbody></table></div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+let selectedProduct = {};
+let quickSelectedProduct = {};
+let quickBasket = [];
+let billItems = [];
+let totalBillAmount = 0;
+let currentFocusIndex = -1;
+let globalSearchData = [];
+let originalStockData = [];
+
+let masterOrderList = [];
+let placedOrdersList = []; // Array map to preserve successfully closed orders tracking
+let currentRunnerPointer = 0;
+let runnerActiveFlag = false;
+let orderHistoryStack = [];
+let orderRedoStack = [];
+
+// ⚡ CORE STEP-BY-STEP KEYBOARD MATRIX INTERCEPTOR
+document.addEventListener('keydown', function(event) {
+    if (runnerActiveFlag) {
+        let activeEl = document.activeElement;
+        if (event.ctrlKey && event.key.toLowerCase() === 'z') {
+            event.preventDefault(); executeRunnerUndo(); return;
+        }
+        if (event.ctrlKey && event.key.toLowerCase() === 'y') {
+            event.preventDefault(); executeRunnerRedo(); return;
+        }
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            let extraVal = document.getElementById('runnerExtraInput').value.trim();
+            executeRunnerStep(extraVal ? 'partial' : 'full', extraVal); return;
+        }
+        if (event.key === ' ' || event.keyCode === 32) {
+            if (activeEl && activeEl.id !== 'runnerExtraInput') {
+                event.preventDefault(); executeRunnerStep('skip', 0); return;
+            }
+        }
+        return;
+    }
+
+    if (event.key === 'Enter') {
+        let activeEl = document.activeElement;
+        if (activeEl && activeEl.classList.contains('step-input')) {
+            if (document.getElementById('stockSearchResults').style.display === 'block' ||
+                document.getElementById('supplierSearchResults').style.display === 'block' ||
+                document.getElementById('typeSearchResults').style.display === 'block') {
+                return; 
+            }
+            event.preventDefault();
+            let inputs = Array.from(document.querySelectorAll('.step-input'));
+            let currIdx = inputs.indexOf(activeEl);
+            if (currIdx === inputs.length - 1) {
+                submitNewStock();
+            } else if (currIdx > -1 && currIdx < inputs.length - 1) {
+                inputs[currIdx + 1].focus();
+            }
+        }
+    }
+    if (event.shiftKey && event.key === 'Enter') {
+        let activeEl = document.activeElement;
+        if (activeEl && activeEl.classList.contains('step-input')) {
+            event.preventDefault();
+            let inputs = Array.from(document.querySelectorAll('.step-input'));
+            let currIdx = inputs.indexOf(activeEl);
+            if (currIdx > 0) { inputs[currIdx - 1].focus(); }
+        }
+    }
+});
+
+function handleSearchNavigation(event, resultsId, mode) {
+    let container = document.getElementById(resultsId);
+    let items = container.getElementsByTagName('button');
+    if (event.key === 'ArrowDown') {
+        event.preventDefault(); currentFocusIndex++;
+        if (currentFocusIndex >= items.length) currentFocusIndex = 0;
+        highlightSuggestion(items);
+    } else if (event.key === 'ArrowUp') {
+        event.preventDefault(); currentFocusIndex--;
+        if (currentFocusIndex < 0) currentFocusIndex = items.length - 1;
+        highlightSuggestion(items);
+    } else if (event.key === 'Enter') {
+        if (currentFocusIndex > -1 && items[currentFocusIndex]) {
+            event.preventDefault(); items[currentFocusIndex].click(); currentFocusIndex = -1;
+        }
+    }
+}
+
+function highlightSuggestion(items) {
+    for (let i = 0; i < items.length; i++) items[i].classList.remove('active-suggestion');
+    if (currentFocusIndex > -1 && items[currentFocusIndex]) {
+        items[currentFocusIndex].classList.add('active-suggestion');
+        items[currentFocusIndex].scrollIntoView({ block: 'nearest' });
+    }
+}
+
+function handleQuickQtyKeyDown(event) {
+    if (event.key === ' ' || event.keyCode === 32) { 
+        event.preventDefault(); addRunningItemToBasket(); document.getElementById('quickSearch').focus();
+    }
+    if (event.key === 'Enter') {
+        event.preventDefault(); if (quickSelectedProduct.name) { addRunningItemToBasket(); } submitMultiQuickStockOut(); document.getElementById('quickSearch').focus();
+    }
+}
+
+window.addEventListener('keydown', function(e) {
+    if (e.altKey && (e.key === 'r' || e.key === 'R')) { 
+        e.preventDefault(); let tabEl = document.getElementById('bill-tab'); bootstrap.Tab.getOrCreateInstance(tabEl).show(); document.getElementById('quickSearch').focus(); 
+    }
+    if (e.altKey && (e.key === 'b' || e.key === 'B')) { 
+        e.preventDefault(); let tabEl = document.getElementById('bill-tab'); bootstrap.Tab.getOrCreateInstance(tabEl).show(); document.getElementById('prodSearch').focus(); 
+    }
+    if (e.altKey && (e.key === 's' || e.key === 'S')) { 
+        e.preventDefault(); let tabEl = document.getElementById('check-stock-tab'); bootstrap.Tab.getOrCreateInstance(tabEl).show(); loadAvailableStockList(); setTimeout(() => { let searchInput = document.getElementById('inventorySearchBar'); searchInput.focus(); searchInput.select(); }, 150);
+    }
+});
+
+function searchMedicine(inputElem, resultsId, mode) {
+    let q = inputElem.value; currentFocusIndex = -1;
+    let container = document.getElementById(resultsId);
+    if(q.length < 2) { container.innerHTML = ''; container.style.display = 'none'; return; }
+    
+    fetch(`/search_product?q=${q}`).then(res => res.json()).then(data => {
+        globalSearchData = data; container.innerHTML = '';
+        if(data.length > 0) {
+            container.style.display = 'block';
+            data.forEach((item, idx) => {
+                let btn = document.createElement('button'); btn.type = 'button';
+                let limit = item.min_stock !== undefined ? parseInt(item.min_stock) : 5;
+                let totalStock = item.total_medicine_stock !== null ? parseInt(item.total_medicine_stock) : 0;
+                let textClass = totalStock <= limit ? 'text-danger fw-bold' : 'text-success';
+                btn.className = `list-group-item list-group-item-action small text-start ${textClass}`;
+                btn.innerText = `${item.name} | Batch: ${item.batch} | Total Stock: ${totalStock} Pkts (Limit: ${limit})`;
+                btn.onclick = function() { executeProductSelect(idx, mode, resultsId); };
+                container.appendChild(btn);
+            });
+        } else { container.style.display = 'none'; }
+    });
+}
+
+function searchSupplierLive(inputElem) {
+    let q = inputElem.value; currentFocusIndex = -1;
+    let container = document.getElementById('supplierSearchResults');
+    if(q.length < 1) { container.innerHTML = ''; container.style.display = 'none'; return; }
+    fetch(`/search_supplier?q=${q}`).then(res => res.json()).then(data => {
+        container.innerHTML = '';
+        if(data.length > 0) {
+            container.style.display = 'block';
+            data.forEach(item => {
+                let btn = document.createElement('button'); btn.type = 'button';
+                btn.className = 'list-group-item list-group-item-action small text-start';
+                btn.innerText = `🏭 ${item.supplier_name}`;
+                btn.onclick = function() {
+                    document.getElementById('s_supplier').value = item.supplier_name;
+                    container.innerHTML = ''; container.style.display = 'none';
+                    setTimeout(() => { document.getElementById('s_type').focus(); }, 50);
+                };
+                container.appendChild(btn);
+            });
+        } else { container.style.display = 'none'; }
+    });
+}
+
+function searchProductTypeLive(inputElem) {
+    let q = inputElem.value; currentFocusIndex = -1;
+    let container = document.getElementById('typeSearchResults');
+    if(q.length < 1) { container.innerHTML = ''; container.style.display = 'none'; return; }
+    fetch(`/search_product_type?q=${q}`).then(res => res.json()).then(data => {
+        container.innerHTML = '';
+        if(data.length > 0) {
+            container.style.display = 'block';
+            data.forEach(item => {
+                let btn = document.createElement('button'); btn.type = 'button';
+                btn.className = 'list-group-item list-group-item-action small text-start';
+                btn.innerText = `💊 ${item.product_type}`;
+                btn.onclick = function() {
+                    document.getElementById('s_type').value = item.product_type;
+                    container.innerHTML = ''; container.style.display = 'none';
+                    setTimeout(() => { document.getElementById('s_pack').focus(); }, 50);
+                };
+                container.appendChild(btn);
+            });
+        } else { container.style.display = 'none'; }
+    });
+}
+
+function executeProductSelect(index, mode, resultsId) {
+    let item = globalSearchData[index]; if(!item) return;
+    if (mode === 'quick') {
+        quickSelectedProduct = item; document.getElementById('quickSearch').value = item.name; document.getElementById('q_batch').value = item.batch; document.getElementById('q_qty').focus();
+    } else if (mode === 'bill') {
+        selectedProduct = item; document.getElementById('prodSearch').value = item.name; document.getElementById('b_batch').value = item.batch; document.getElementById('b_stock').value = item.stock_strips; document.getElementById('b_rate').value = item.rate_per_strip;
+    } else if (mode === 'stock') {
+        document.getElementById('s_name').value = item.name; 
+        document.getElementById('s_supplier').value = item.supplier_name || ''; 
+        document.getElementById('s_type').value = item.product_type || ''; 
+        document.getElementById('s_pack').value = item.packing_desc || ''; 
+        document.getElementById('s_qty_per').value = item.qty_per_strip || 10; 
+        document.getElementById('s_hsn').value = item.hsn || ''; 
+        document.getElementById('s_mrp').value = item.mrp_per_strip || ''; 
+        document.getElementById('s_rate').value = item.rate_per_strip || ''; 
+        document.getElementById('s_exp_month').value = ''; 
+        document.getElementById('s_exp_year').value = '';
+        let minStockInput = document.getElementById('s_min_stock'); 
+        minStockInput.value = item.min_stock !== undefined ? item.min_stock : 5;
+        
+        let container = document.getElementById(resultsId); container.innerHTML = ''; container.style.display = 'none';
+        
+        // 🚨 CRITICAL FIX: কার্সার ওষুধের নাম সিলেক্ট করার পর সোজা Supplier Name বক্সে ফোকাস করবে
+        setTimeout(() => { 
+            document.getElementById('s_supplier').focus(); 
+        }, 50);
+    }
+}
+
+function refreshStockForm() {
+    document.getElementById('s_name').value = ''; document.getElementById('s_supplier').value = ''; document.getElementById('s_type').value = ''; document.getElementById('s_pack').value = ''; document.getElementById('s_batch').value = ''; document.getElementById('s_hsn').value = ''; document.getElementById('s_exp_month').value = ''; document.getElementById('s_exp_year').value = ''; document.getElementById('s_mrp').value = ''; document.getElementById('s_rate').value = ''; document.getElementById('s_min_stock').value = '5'; document.getElementById('s_str').value = '0'; document.getElementById('s_name').focus();
+}
+
+function saveProfileChanges() {
+    let sName = document.getElementById('p_shop_name').value.trim(); let gNo = document.getElementById('p_gstin').value.trim();
+    fetch('/update_profile', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ shop_name: sName, gstin: gNo }) }).then(res => res.json()).then(data => { alert(data.message); if(data.status === 'success') { document.getElementById('liveShopNameDisplay').innerText = sName.toUpperCase(); document.getElementById('liveGstDisplay').innerText = "GSTIN: " + gNo.toUpperCase(); bootstrap.Modal.getInstance(document.getElementById('profileModal')).hide(); } });
+}
+
+function loadSuppliersList() {
+    fetch('/get_suppliers').then(res => res.json()).then(data => {
+        let ul = document.getElementById('modalSuppliersListGroup'); ul.innerHTML = ''; if(data.length === 0) { ul.innerHTML = '<li class="list-group-item text-muted small text-center">No suppliers recorded yet.</li>'; return; }
+        data.forEach(sup => { let li = document.createElement('li'); li.className = 'list-group-item d-flex justify-content-between align-items-center small fw-bold text-secondary'; li.innerHTML = `🏭 ${sup.supplier_name} <button type="button" class="btn btn-sm btn-danger py-0 px-2 fw-bold" onclick="deleteSupplierProfile(${sup.id})">Remove</button>`; ul.appendChild(li); });
+    });
+}
+
+function saveStandaloneSupplier() {
+    let supName = document.getElementById('p_supplier_name').value.trim(); if(!supName) return;
+    fetch('/add_standalone_supplier', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ supplier_name: supName }) }).then(res => res.json()).then(data => { alert(data.message); if(data.status === 'success') { document.getElementById('p_supplier_name').value = ''; loadSuppliersList(); } });
+}
+
+function deleteSupplierProfile(id) { if(!confirm("Are you sure?")) return; fetch('/delete_supplier', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ id: id }) }).then(res => res.json()).then(data => { alert(data.message); loadSuppliersList(); }); }
+
+function addRunningItemToBasket() {
+    let qty = parseInt(document.getElementById('q_qty').value) || 0; if(!quickSelectedProduct.name || qty <= 0) { return; }
+    quickBasket.push({ name: quickSelectedProduct.name, batch: quickSelectedProduct.batch, qty: qty }); renderQuickBasket(); document.getElementById('quickSearch').value = ''; document.getElementById('q_batch').value = ''; quickSelectedProduct = {};
+}
+
+function renderQuickBasket() {
+    document.getElementById('quickBasketCount').innerText = `${quickBasket.length} Items In Basket`; let listContainer = document.getElementById('quickBasketItemsList'); listContainer.innerHTML = ''; if(quickBasket.length === 0) { document.getElementById('quickBasketContainer').style.display = 'none'; return; }
+    document.getElementById('quickBasketContainer').style.display = 'block'; quickBasket.forEach((item, index) => { let span = document.createElement('span'); span.className = "badge bg-warning text-dark p-2 d-flex align-items-center gap-2 fw-bold shadow-sm"; span.innerHTML = `${item.name} (B:${item.batch}) - ${item.qty} Pkt <button type="button" class="btn-close" style="font-size: 10px;" onclick="removeRunningItemFromBasket(${index})"></button>`; listContainer.appendChild(span); });
+}
+
+function removeRunningItemFromBasket(index) { quickBasket.splice(index, 1); renderQuickBasket(); document.getElementById('quickSearch').focus(); }
+
+function submitMultiQuickStockOut() { if(quickBasket.length === 0) return; fetch('/quick_stock_out', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ items: quickBasket }) }).then(res => res.json()).then(data => { alert(data.message); if(data.status === 'success') { quickBasket = []; renderQuickBasket(); } }); }
+
+function addItemToBillTable() {
+    let s_str = parseInt(document.getElementById('b_sell_str').value) || 0; let disc = parseFloat(document.getElementById('b_disc').value) || 0; if(!selectedProduct.name || s_str <= 0) return; let taxable = (selectedProduct.rate_per_strip * s_str) * (1 - (disc/100)); let net_total = taxable * 1.05; totalBillAmount += net_total; billItems.push({ name: selectedProduct.name, batch: selectedProduct.batch, sell_strips: s_str, net_total: net_total }); let tbody = document.getElementById('invoiceTable').getElementsByTagName('tbody')[0]; let row = tbody.insertRow(); row.innerHTML = `<td>${s_str}</td><td class="text-start fw-bold">${selectedProduct.name}</td><td>${selectedProduct.batch}</td><td>${selectedProduct.rate_per_strip}</td><td>${disc}</td><td class="fw-bold">₹${net_total.toFixed(2)}</td>`; document.getElementById('gTotalDisplay').innerText = `₹${Math.round(totalBillAmount)}.00`; document.getElementById('prodSearch').value = ''; document.getElementById('b_batch').value = ''; document.getElementById('b_stock').value = ''; document.getElementById('b_rate').value = ''; selectedProduct = {};
+}
+
+function submitInvoice() { let cust = document.getElementById('custName').value; if(billItems.length === 0) return; fetch('/submit_invoice', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ customer_name: cust, items: billItems }) }).then(res => res.json()).then(data => { if(data.status === 'success') { alert("Bill Saved!"); location.reload(); } }); }
+
+function loadAvailableStockList() { fetch('/get_all_stock').then(res => res.json()).then(data => { originalStockData = data; renderStockTableRows(data); }); }
+
+function renderStockTableRows(itemsList) {
+    let tbody = document.getElementById('stockCheckTable').getElementsByTagName('tbody')[0]; tbody.innerHTML = ''; if(itemsList.length === 0) { tbody.innerHTML = '<tr><td colspan="4">No stock items found.</td></tr>'; return; }
+    itemsList.forEach((item, index) => {
+        let limit = item.min_stock !== undefined ? parseInt(item.min_stock) : 5; let totalStock = item.total_medicine_stock !== null ? parseInt(item.total_medicine_stock) : 0; let isLow = totalStock <= limit; let stockClass = isLow ? "text-danger fw-bold bg-danger bg-opacity-10" : "fw-bold text-success bg-success bg-opacity-10"; let row = tbody.insertRow(); row.className = "clickable-row"; row.onclick = function() { toggleBatchDetails(index); }; row.innerHTML = `<td class="text-start fw-bold">🔹 ${item.name}</td><td class="${stockClass}">${totalStock} Pkts</td><td class="fw-bold text-secondary">${limit} Pkts</td><td class="fw-bold text-dark">₹${item.rate_per_strip}</td>`; let detailRow = tbody.insertRow(); detailRow.id = `batch-details-row-${index}`; detailRow.style.display = "none"; let detailCell = detailRow.insertCell(); detailCell.colSpan = 4; let batchHtml = `<div class="batch-details-box border"><table class="table table-sm table-borderless m-0 small"><thead class="table-light text-secondary"><tr><th>Batch No</th><th>Available Qty</th><th>Expiry Date</th><th>Product Type</th><th>Supplier Name</th></tr></thead><tbody>`; item.batch_details.forEach(b => { batchHtml += `<tr><td class="fw-bold text-primary">${b.batch}</td><td class="fw-bold text-dark">${b.stock_strips} Pkts</td><td class="text-muted">${b.exp_date}</td><td><span class="badge bg-info text-dark">${b.product_type || 'N/A'}</span></td><td class="text-muted small">${b.supplier_name || 'N/A'}</td></tr>`; }); batchHtml += `</tbody></table></div>`; detailCell.innerHTML = batchHtml;
+    });
+}
+
+function toggleBatchDetails(index) { let targetRow = document.getElementById(`batch-details-row-${index}`); let box = targetRow.querySelector('.batch-details-box'); if (targetRow.style.display === "none") { targetRow.style.display = "table-row"; box.style.display = "block"; } else { box.style.display = "none"; targetRow.style.display = "none"; } }
+
+function filterInventoryTable(searchQuery) { let text = searchQuery.toLowerCase().trim(); if(!text) { renderStockTableRows(originalStockData); return; } let filtered = originalStockData.filter(item => item.name.toLowerCase().includes(text)); renderStockTableRows(filtered); }
+
+function submitNewStock() {
+    let m = document.getElementById('s_exp_month').value.trim(); let y = document.getElementById('s_exp_year').value.trim();
+    if(!m || !y) { alert("Please enter Expiry Month and Year!"); return; }
+    if(m.length === 1) m = "0" + m; if(y.length === 4) y = y.substring(2, 4);
+    let formatted_exp = m + "/" + y;
+    let stockData = {
+        supplier_name: document.getElementById('s_supplier').value, product_type: document.getElementById('s_type').value,
+        name: document.getElementById('s_name').value, packing: document.getElementById('s_pack').value,
+        qty_per_strip: document.getElementById('s_qty_per').value, batch: document.getElementById('s_batch').value,
+        hsn: document.getElementById('s_hsn').value, exp_date: formatted_exp,
+        mrp: document.getElementById('s_mrp').value, rate: document.getElementById('s_rate').value,
+        min_stock: document.getElementById('s_min_stock').value, strips: document.getElementById('s_str').value
+    };
+    if(!stockData.name || !stockData.batch || !stockData.strips) { alert("Please enter Name, Batch, and Qty!"); return; }
+    fetch('/add_stock', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(stockData) }).then(res => res.json()).then(data => { alert(data.message); if(data.status === 'success') { refreshStockForm(); setTimeout(() => { loadAvailableStockList(); }, 300); } });
+}
+
+// --- 📋 TWO TABLES SYSTEM IN ORDER MEDICINE TAB ---
+function loadOrderMedicinePanel() {
+    fetch('/get_all_stock').then(res => res.json()).then(inventoryData => {
+        // লোড করার সময় মেইন অর্ডার লিস্ট ক্লিয়ার করা হয় না, কেবল পুরনো প্লেসড হওয়া লিস্ট ছাড়া ফ্রেস করা হয়
+        if(!runnerActiveFlag) {
+            masterOrderList = [];
+            inventoryData.forEach(item => {
+                let limit = item.min_stock !== undefined ? parseInt(item.min_stock) : 5;
+                let totalStock = item.total_medicine_stock !== null ? parseInt(item.total_medicine_stock) : 0;
+                if (totalStock <= limit) {
+                    let deficit = limit - totalStock;
+                    if(!masterOrderList.some(x => x.name === item.name) && !placedOrdersList.some(x => x.name === item.name)) {
+                        masterOrderList.push({ name: item.name, totalStock: totalStock, limit: limit, pending_qty: deficit });
+                    }
+                }
+            });
+        }
+        
+        // কাস্টমার রিকোয়েস্ট বুক অ্যাপেন্ড
+        fetch('/get_custom_order_requests').then(res => res.json()).then(requestedData => {
+            if(!runnerActiveFlag) {
+                requestedData.forEach(req => {
+                    if(!masterOrderList.some(x => x.name === req.medicine_name) && !placedOrdersList.some(x => x.name === req.medicine_name)) {
+                        masterOrderList.push({ name: req.medicine_name, totalStock: 0, limit: 'Request', pending_qty: 10 });
+                    }
+                });
+            }
+            renderOrderTablesHTML();
+        });
+    });
+}
+
+// 🎯 দুই টেবিলের এইচটিএমএল ড্রয়িং লজিক (Pending Table vs Placed Table)
+function renderOrderTablesHTML() {
+    // টেবিল ১: Pending Items (যা এখনো অর্ডার করতে হবে)
+    let tbodyPending = document.getElementById('shortageOrderTable').getElementsByTagName('tbody')[0];
+    tbodyPending.innerHTML = '';
+    if (masterOrderList.length === 0) {
+        tbodyPending.innerHTML = '<tr><td colspan="3" class="text-success fw-bold py-2">No medicines pending for order.</td></tr>';
+    } else {
+        masterOrderList.forEach(item => {
+            let row = tbodyPending.insertRow();
+            row.innerHTML = `<td class="text-start fw-bold text-dark">🔴 ${item.name}</td><td>${item.totalStock} Pkts</td><td class="fw-bold text-secondary">${item.limit} Pkts</td>`;
+        });
+    }
+
+    // টেবিল ২: Placed Items (সফলভাবে অর্ডার বুকড করা হয়েছে)
+    let tbodyPlaced = document.getElementById('placedOrdersTable').getElementsByTagName('tbody')[0];
+    tbodyPlaced.innerHTML = '';
+    if (placedOrdersList.length === 0) {
+        tbodyPlaced.innerHTML = '<tr><td colspan="2" class="text-muted small py-2">No orders placed in this session yet.</td></tr>';
+    } else {
+        placedOrdersList.forEach(item => {
+            let row = tbodyPlaced.insertRow();
+            row.className = "table-success";
+            row.innerHTML = `<td class="text-start fw-bold text-success">✅ ${item.name}</td><td class="fw-bold text-dark">${item.status}</td>`;
+        });
+    }
+}
+
+function loadCustomOrderRequestsBook() { loadOrderMedicinePanel(); }
+function submitCustomOrderRequest() {
+    let val = document.getElementById('customOrderInput').value.trim(); if(!val) return;
+    fetch('/add_custom_order_request', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ medicine_name: val }) }).then(res => res.json()).then(data => { alert(data.message); if(data.status === 'success') { document.getElementById('customOrderInput').value = ''; loadOrderMedicinePanel(); } });
+}
+function deleteCustomRequestProfile(id) { fetch('/remove_custom_order_request', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ id: id }) }).then(res => res.json()).then(data => { loadOrderMedicinePanel(); }); }
+
+function startOrderRunnerWorkflow() {
+    if (masterOrderList.length === 0) { alert("No items currently available in the shortage list to order!"); return; }
+    runnerActiveFlag = true; currentRunnerPointer = 0; orderHistoryStack = []; orderRedoStack = [];
+    document.getElementById('activeOrderRunnerBox').style.display = 'block';
+    renderRunnerCurrentState();
+}
+
+function stopOrderRunnerWorkflow() { runnerActiveFlag = false; document.getElementById('activeOrderRunnerBox').style.display = 'none'; loadOrderMedicinePanel(); }
+
+function renderRunnerCurrentState() {
+    if (currentRunnerPointer >= masterOrderList.length) {
+        alert("🎉 Loop complete! Successfully updated order dashboard lists.");
+        // ফিল্টার লুপ চালিয়ে কমপ্লিট হওয়া আইটেমগুলো মেইন লিস্ট থেকে পার্মানেন্ট মুছে দেওয়া হয়
+        masterOrderList = masterOrderList.filter(item => item.pending_qty > 0);
+        stopOrderRunnerWorkflow(); return;
+    }
+    let currentMed = masterOrderList[currentRunnerPointer];
+    document.getElementById('runnerMedName').innerText = currentMed.name;
+    document.getElementById('runnerTargetQty').innerText = currentMed.pending_qty + " Pkts Required";
+    
+    let extraInput = document.getElementById('runnerExtraInput'); 
+    extraInput.value = ''; 
+    
+    // 🎯 AUTOMATIC BOX SELECT: লুপ চলাকালীন এই বক্সটি কিবোর্ডের রাইটিং ফোকাস নিজে থেকে কভার করে নেবে
+    setTimeout(() => { 
+        extraInput.focus(); 
+        extraInput.select(); 
+    }, 50);
+}
+
+function executeRunnerStep(actionType, extraQty) {
+    let currentMed = masterOrderList[currentRunnerPointer];
+    
+    // হিস্ট্রি ট্র্যাকিং স্ন্যাপশট পুশ
+    orderHistoryStack.push({ 
+        pointer: currentRunnerPointer, 
+        medName: currentMed.name, 
+        prevPending: currentMed.pending_qty,
+        placedSnapshot: [...placedOrdersList] // ব্যাকট্র্যাক করার জন্য ব্যাকআপ স্ন্যাপশট
+    });
+    orderRedoStack = [];
+
+    if (actionType === 'full') {
+        // সম্পূর্ণ পেয়ে গেছেন -> অর্ডার প্লেসড টেবিলে ট্রান্সফার করা হলো
+        placedOrdersList.push({ name: currentMed.name, status: `Full Ordered (${currentMed.pending_qty} Pkts)` });
+        currentMed.pending_qty = 0;
+        masterOrderList.splice(currentRunnerPointer, 1); // পেন্ডিং লিস্ট থেকে রিমুভ
+        // কার্সার পয়েন্টার বাড়াতে হবে না কারণ কারেন্ট আইটেম স্প্লাইস হয়ে গেছে
+    } else if (actionType === 'partial') {
+        let remainder = parseInt(extraQty) || 0;
+        let piecesGot = currentMed.pending_qty - remainder;
+        placedOrdersList.push({ name: currentMed.name, status: `Partial Got ${piecesGot} Pkts / Remainder: ${remainder} Pkts` });
+        currentMed.pending_qty = remainder;
+        currentRunnerPointer++; // রিমাইন্ডার আছে তাই পরের সেলারের জন্য লিস্টে থেকে যাবে
+    } else if (actionType === 'skip') {
+        // Space বার চাপলে (0 পিস) -> কিছু না করে পরের আইটেমে স্কিপ করা হলো
+        currentRunnerPointer++;
+    }
+    
+    renderRunnerCurrentState();
+}
+
+function executeRunnerUndo() {
+    if (orderHistoryStack.length === 0) return;
+    let lastState = orderHistoryStack.pop();
+    
+    // যদি আমরা আগের স্টেপে কোনো ওষুধ স্প্লাইস (ডিলিট) করে থাকি, তবে তা আবার আগের জায়গায় রি-ইনসার্ট করা হবে
+    if (lastState.prevPending > 0 && !masterOrderList.some(x => x.name === lastState.medName)) {
+        masterOrderList.splice(lastState.pointer, 0, { name: lastState.medName, totalStock: 0, limit: 'Alert', pending_qty: lastState.prevPending });
+    }
+    
+    placedOrdersList = lastState.placedSnapshot;
+    currentRunnerPointer = lastState.pointer;
+    masterOrderList[currentRunnerPointer].pending_qty = lastState.prevPending;
+    
+    renderRunnerCurrentState();
+}
+
+function executeRunnerRedo() {
+    if (orderRedoStack.length === 0) return;
+    // রিডু স্ট্যাক হ্যান্ডলার সাব-লুপ
+}
+
+function filterHistory(type, timeVal, btnElem) { let btns = btnElem.parentElement.getElementsByTagName('button'); for(let b of btns) b.classList.remove('active'); btnElem.classList.add('active'); if (type === 'bill') loadBillHistory(timeVal); if (type === 'incoming') loadIncomingStockHistory(timeVal); if (type === 'outgoing') loadOutgoingStockLogs(timeVal); }
+function loadBillHistory(filterVal) { fetch(`/get_bill_history?filter=${filterVal}`).then(res => res.json()).then(data => { let tbody = document.getElementById('billHistoryTableBody'); tbody.innerHTML = ''; if(data.length === 0) { tbody.innerHTML = '<tr><td colspan="4">No Records Found</td></tr>'; return; } data.forEach(b => { let row = tbody.insertRow(); row.innerHTML = `<td class="fw-bold text-primary">${b.invoice_no}</td><td>${b.customer_name}</td><td>${b.date_time}</td><td class="fw-bold text-success">₹${b.grand_total}</td>`; }); }); }
+function loadIncomingStockHistory(filterVal) { fetch(`/get_incoming_stock_history?filter=${filterVal}`).then(res => res.json()).then(data => { let tbody = document.getElementById('incomingStockHistoryTableBody'); tbody.innerHTML = ''; if(data.length === 0) { tbody.innerHTML = '<tr><td colspan="5">No Incoming Records Found</td></tr>'; return; } data.forEach(l => { let row = tbody.insertRow(); row.innerHTML = `<td class="text-start fw-bold text-success">${l.name}</td><td>${l.batch}</td><td class="fw-bold">+${l.qty_strips} Pkt</td><td>${l.supplier_name || 'N/A'}</td><td>${l.date_time}</td>`; }); }); }
+function loadOutgoingStockLogs(filterVal) { fetch(`/get_outgoing_stock?filter=${filterVal}`).then(res => res.json()).then(data => { let tbody = document.getElementById('outgoingStockTableBody'); tbody.innerHTML = ''; if(data.length === 0) { tbody.innerHTML = '<tr><td colspan="5">No Outgoing Records Found</td></tr>'; return; } data.forEach(l => { let row = tbody.insertRow(); let badgeClass = l.type.includes('Billed') ? 'badge bg-primary' : 'badge bg-warning text-dark'; row.innerHTML = `<td class="text-start fw-bold text-danger">${l.name}</td><td>${l.batch}</td><td class="fw-bold">-${l.qty_strips} Pkt</td><td><span class="${badgeClass}">${l.type}</span></td><td>${l.date_time}</td>`; }); }); }
+</script>
+</body>
+</html>
